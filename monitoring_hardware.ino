@@ -21,10 +21,10 @@ SoftwareSerial esp8266(2, 3);
 #define DEBUG true
 
 #define HTTP_PORT 80
-#define SERVER_POST_COMMAND "lcamonitoring.herokuapp.com/api/v1/monitoring"
+#define SERVER_POST_COMMAND "lcasys.com"
 #define TEMPO_CLOUD 60000
-#define DEVICE_ID 7
-char server_cloud[] = "lcamonitoring.herokuapp.com";
+#define DEVICE_ID 8
+char server_cloud[] = "lcasys.com";
 EthernetClient client_cloud;
 long tempo_cloud;
 
@@ -32,7 +32,7 @@ long tempo_cloud;
 //IPAddress ip(192, 168, 25, 4);
 // Enter a MAC address and IP address for your controller below.
 // The IP address will be dependent on your local network:
-byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
+byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xEA};
 
 
 
