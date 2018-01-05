@@ -314,12 +314,9 @@ void setup()
       }
     case 2: {
         // start the Ethernet DHCP connection:
-        if(Ethernet.begin(mac) == 0) {
+        while(Ethernet.begin(mac) == 0) {
           Serial.println(F("Failed to configure Ethernet using DHCP"));
-          // no point in carrying on, so do nothing forevermore:
-          while (1) {
-            delay(100);
-          }
+          delay(5000);
         }
         // print your local IP address:
         Serial.print("My IP address: ");
