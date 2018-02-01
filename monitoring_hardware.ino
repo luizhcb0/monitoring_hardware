@@ -23,11 +23,12 @@ SoftwareSerial esp8266(2, 3);
 #define HTTP_PORT 80
 #define SERVER_POST_COMMAND "lcasys.com"
 #define TEMPO_CLOUD 60000
-#define DEVICE_ID 8
+#define DEVICE_ID 6
 char server_cloud[] = "lcasys.com";
 EthernetClient client_cloud;
 long tempo_cloud;
-
+boolean flag_FirstConnectionSuccess = true;
+#define TIMEOUT_DHCP 300000 //Tenta se conectar via DHCP por 5 min, antes de usar o ultimo IP valido
 
 //IPAddress ip(192, 168, 25, 4);
 // Enter a MAC address and IP address for your controller below.
@@ -75,11 +76,11 @@ Ultrasonic ultrasonic(pino_trigger, pino_echo);
 
 void setup()
 {
-  pinMode(3,OUTPUT);
-  pinMode(6,INPUT);
-  analogWrite(3,255);
+  pinMode(3, OUTPUT);
+  pinMode(6, INPUT);
+  analogWrite(3, 255);
 
-  
+
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
   while (!Serial) {
@@ -310,24 +311,39 @@ void setup()
         Ethernet.begin(mac, ip);
         Serial.print(F("server is at "));
         Serial.println(Ethernet.localIP());
-
+        break;
       }
     case 2: {
-        // start the Ethernet DHCP connection:
-        while(Ethernet.begin(mac) == 0) {
-          Serial.println(F("Failed to configure Ethernet using DHCP"));
-          delay(5000);
+        // try to start the Ethernet DHCP connection:
+        long tempo_DHCP = millis();
+        byte connec;
+        while ((millis() - tempo_DHCP) < TIMEOUT_DHCP) {
+          connec = Ethernet.begin(mac);
+          if (connec == 0) {
+            Serial.println(F("Failed to configure Ethernet using DHCP, will try again after 5 sec"));
+            delay(5000);
+          }
+          else {
+            break;
+          }
         }
-        // print your local IP address:
-        Serial.print("My IP address: ");
-        for (byte thisByte = 0; thisByte < 4; thisByte++) {
-          // print the value of each byte of the IP address:
-          Serial.print(Ethernet.localIP()[thisByte], DEC);
-          Serial.print(".");
+        if (connec == 0) {
+          //Will start the Ethernet connection with the last valid DHCP IP acquired (which connected to cloud successfully):
+          Ethernet.begin(mac, ip);
+          Serial.print(F("DHCP falhou completamente, iniciando com o ultimo IP que conseguiu se conectar a nuvem: "));
+          Serial.println(Ethernet.localIP());
         }
-        Serial.println();
-
-
+        else {
+          // print your local IP address:
+          Serial.print("My IP address: ");
+          for (byte thisByte = 0; thisByte < 4; thisByte++) {
+            // print the value of each byte of the IP address:
+            Serial.print(Ethernet.localIP()[thisByte], DEC);
+            Serial.print(".");
+          }
+          Serial.println();
+        }
+        break;
       }
     case 3: {
         String ssid_wifi = "";
@@ -337,7 +353,7 @@ void setup()
         String password_wifi = "";
         for (byte i = 0; i < SIZE_PASSW; i++) {
           password_wifi += String(char(EEPROM.read(450 + i)));
-        }     
+        }
         // Configure na linha abaixo a velocidade inicial do
         // modulo ESP8266
         esp8266.begin(115200);
@@ -354,7 +370,7 @@ void setup()
         esp8266.begin(19200);
         sendData("AT+RST\r\n", 2000, DEBUG); // rst
         // Conecta a rede wireless
-        sendData(String("AT+CWJAP=\""+ssid_wifi+"\",\""+password_wifi+"\"\r\n"), 2000, DEBUG);
+        sendData(String("AT+CWJAP=\"" + ssid_wifi + "\",\"" + password_wifi + "\"\r\n"), 2000, DEBUG);
         delay(3000);
         sendData("AT+CWMODE=1\r\n", 1000, DEBUG);
         delay(3000);
@@ -367,6 +383,7 @@ void setup()
         // Inicia o web server na porta 80
         sendData("AT+CIPSERVER=1,80\r\n", 1000, DEBUG);
         delay(3000);
+        break;
       }
   }
 
@@ -390,11 +407,11 @@ void setup()
 //Verifica se as leituras estão com diferença de no máximo 5%
 boolean valida_leituras() {
   boolean teste = true;
-//  for (byte i = 1; i < (sizeof(nivel_liquido) / sizeof(int)); i++) {
-//    if (  ((sqrt(pow(2, ((1.05 * nivel_liquido[i]) - (0.95 * nivel_liquido[i - 1]))))) > (TOLERANCE * NIVEL_TOTAL)) || ((sqrt(pow(2, ((1.05 * nivel_liquido[i - 1]) - (0.95 * nivel_liquido[i]))))) > (TOLERANCE * NIVEL_TOTAL)) ) {
-//      teste = false;
-//    }
-//  }
+  //  for (byte i = 1; i < (sizeof(nivel_liquido) / sizeof(int)); i++) {
+  //    if (  ((sqrt(pow(2, ((1.05 * nivel_liquido[i]) - (0.95 * nivel_liquido[i - 1]))))) > (TOLERANCE * NIVEL_TOTAL)) || ((sqrt(pow(2, ((1.05 * nivel_liquido[i - 1]) - (0.95 * nivel_liquido[i]))))) > (TOLERANCE * NIVEL_TOTAL)) ) {
+  //      teste = false;
+  //    }
+  //  }
   return teste;
 }
 
@@ -424,7 +441,7 @@ void preenche_nivel_atual() {
   nivel_atual /= float(100); //para ficar em metros
 }
 
-String sendData(String command, const int timeout, boolean debug){
+String sendData(String command, const int timeout, boolean debug) {
   // Envio dos comandos AT para o modulo
   String response = "";
   esp8266.print(command);
@@ -626,40 +643,40 @@ void loop() {
     //    Serial.println(freeMemory());
   }
   else if (TYPE_CONNECTION == 3) {
-// Verifica se o ESP8266 esta enviando dados
-  if (esp8266.available())
-  {
-    if (esp8266.find("+IPD,"))
+    // Verifica se o ESP8266 esta enviando dados
+    if (esp8266.available())
     {
-      delay(300);
-      int connectionId = esp8266.read() - 48;
+      if (esp8266.find("+IPD,"))
+      {
+        delay(300);
+        int connectionId = esp8266.read() - 48;
 
-      String webpage = "<head><meta http-equiv=""refresh"" content=""3"">";
-      webpage += "</head><h1><u>ESP8266 - Web Server</u></h1><h2>Porta";
-      webpage += "Digital 8: ";
-      int a = digitalRead(8);
-      webpage += a;
-      webpage += "<h2>Porta Digital 9: ";
-      int b = digitalRead(9);
-      webpage += b;
-      webpage += "</h2>";
+        String webpage = "<head><meta http-equiv=""refresh"" content=""3"">";
+        webpage += "</head><h1><u>ESP8266 - Web Server</u></h1><h2>Porta";
+        webpage += "Digital 8: ";
+        int a = digitalRead(8);
+        webpage += a;
+        webpage += "<h2>Porta Digital 9: ";
+        int b = digitalRead(9);
+        webpage += b;
+        webpage += "</h2>";
 
-      String cipSend = "AT+CIPSEND=";
-      cipSend += connectionId;
-      cipSend += ",";
-      cipSend += webpage.length();
-      cipSend += "\r\n";
+        String cipSend = "AT+CIPSEND=";
+        cipSend += connectionId;
+        cipSend += ",";
+        cipSend += webpage.length();
+        cipSend += "\r\n";
 
-      sendData(cipSend, 1000, DEBUG);
-      sendData(webpage, 1000, DEBUG);
+        sendData(cipSend, 1000, DEBUG);
+        sendData(webpage, 1000, DEBUG);
 
-      String closeCommand = "AT+CIPCLOSE=";
-      closeCommand += connectionId; // append connection id
-      closeCommand += "\r\n";
+        String closeCommand = "AT+CIPCLOSE=";
+        closeCommand += connectionId; // append connection id
+        closeCommand += "\r\n";
 
-      sendData(closeCommand, 3000, DEBUG);
+        sendData(closeCommand, 3000, DEBUG);
+      }
     }
-  }
   }
   /*** SERVER HTTP-GET / WEB ***********************************************************************************************************************************/
 
@@ -676,6 +693,19 @@ void loop() {
       //If you get a connection with cloud, report back via serial:
       if (client_cloud.connect(server_cloud, HTTP_PORT)) {
         Serial.println(F("\nConnected to Cloud!\n"));
+
+        //Se a conexao e DHCP e deu certo, guarda o endereco para o caso de ligar e noa conseguir pegar nada pelo DHCP
+        if (flag_FirstConnectionSuccess && TYPE_CONNECTION == 2) {
+          Serial.println("IP DHCP validado, salvando na EEPROM...");
+          for (byte thisByte = 0; thisByte < 4; thisByte++) {
+            EEPROM.write(thisByte + 2, Ethernet.localIP()[thisByte]);
+            Serial.print(EEPROM.read(thisByte + 2));
+            Serial.print(".");
+          }
+          flag_FirstConnectionSuccess = false;
+        }
+
+
         // Make a HTTP request:
         String PostCommand = "POST /api/v1/monitoring?level[level]=";
         PostCommand += String(nivel_liquido_medio);
