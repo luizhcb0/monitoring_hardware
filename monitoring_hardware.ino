@@ -23,7 +23,7 @@ SoftwareSerial esp8266(2, 3);
 #define HTTP_PORT 80
 #define SERVER_POST_COMMAND "lcasys.com"
 #define TEMPO_CLOUD 60000
-#define DEVICE_ID 6
+#define DEVICE_ID 7
 char server_cloud[] = "lcasys.com";
 EthernetClient client_cloud;
 long tempo_cloud;
